@@ -1,4 +1,4 @@
-# main.py - v1.0.12
+# main.py - v1.0.13
 import network, urequests, utime, ujson, gc, os
 from machine import Pin, ADC, Timer, reset
 import _thread
