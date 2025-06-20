@@ -8,13 +8,13 @@ import gc
 from machine import Pin, ADC
 
 # ========== Configuration ==========
-VERSION = "beta v0.0.2"
+VERSION = "beta v0.0.3"
 WIFI_CREDENTIALS = {
     "Makers Studio": "Jba10600"
 }
 BOT_TOKEN = "8050097491:AAEupepQid6h9-ch8NghIbuVeyZQxl6miE4"
 CHAT_ID = "-1002725182243"
-GITHUB_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py?v=0.0.2"
+GITHUB_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py?v=0.0.3"
 TIMEZONE_OFFSET = 8 * 3600  # GMT+8
 
 # ========== Flags ==========
@@ -22,6 +22,7 @@ monitoring = True
 mode = "real"
 ota_updating = False
 core1_has_exited = False
+core1_running = False
 last_update_id = None
 
 # ========== Pins ==========
@@ -108,13 +109,10 @@ def do_ota_update():
 
 # ========== Core 1 ==========
 def core1_monitor():
-    global core1_has_exited
+    global core1_has_exited, core1_running
+    core1_running = True
     blink_time = 0.5
-    while True:
-        if ota_updating:
-            core1_has_exited = True
-            break
-
+    while not ota_updating:
         wlan = network.WLAN(network.STA_IF)
         led.value(wlan.isconnected())
 
@@ -130,9 +128,12 @@ def core1_monitor():
         else:
             utime.sleep(1)
 
+    core1_has_exited = True
+    core1_running = False
+
 # ========== Core 0 ==========
 def handle_command(cmd):
-    global monitoring, mode, ota_updating
+    global monitoring, mode, ota_updating, core1_running
     if cmd == "/check":
         send_message(f"Digital reading: {digital_sensor.value()}")
     elif cmd == "/telemetry":
@@ -155,8 +156,12 @@ def handle_command(cmd):
     elif cmd == "/all":
         send_message("/telemetry  /check  /time  /stop  /start  /real  /test  /all  /update")
     elif cmd == "/update":
-        ota_updating = True
-        _thread.start_new_thread(do_ota_update, ())
+        if not ota_updating and core1_running:
+            ota_updating = True
+            send_message("Preparing for OTA update...")
+            # Wait before OTA thread to ensure core1 exits
+            utime.sleep(1)
+            _thread.start_new_thread(do_ota_update, ())
 
 def listen_telegram():
     global last_update_id
@@ -184,7 +189,10 @@ def main():
     boot_msg = f"SEKATA Bioflok Monitoring System\nDevice Reboot and connected to Internet. Version: {VERSION}\nCommands: /telemetry  /check  /time  /stop  /start  /real  /test  /all  /update"
     send_message(boot_msg)
 
-    _thread.start_new_thread(core1_monitor, ())
+    # Start core1 if not running
+    if not core1_running:
+        _thread.start_new_thread(core1_monitor, ())
+
     listen_telegram()
 
 main()
