@@ -9,6 +9,9 @@ import ntptime
 import os
 from machine import Pin
 
+# ====== OTA VERSION ======
+OTA_VERSION = "1.0.0"
+
 # ====== CONFIGURATION ======
 WIFI_CREDENTIALS = {
     "Makers Studio": "Jba10600",
@@ -100,17 +103,35 @@ def get_updates():
     except:
         return []
 
-# ====== OTA UPDATE ======
+# ====== OTA UPDATE WITH VERSION CHECK ======
 def perform_ota_update():
     try:
+        print("Checking for OTA update...")
         r = urequests.get(OTA_URL)
         new_code = r.text
         r.close()
+
+        # Extract OTA_VERSION from downloaded script
+        for line in new_code.split("\n"):
+            if line.startswith("OTA_VERSION"):
+                new_version = line.split("=")[1].strip().strip('"')
+                break
+        else:
+            send_telegram("OTA: No version info found.")
+            return
+
+        # Compare versions
+        if new_version == OTA_VERSION:
+            send_telegram(f"Already up to date (v{OTA_VERSION}).")
+            return
+
+        # Update and reboot
         with open("main.py", "w") as f:
             f.write(new_code)
-        send_telegram("✅ OTA update successful. Rebooting...")
+        send_telegram(f"✅ OTA update to v{new_version} successful. Rebooting...")
         utime.sleep(2)
         machine.reset()
+
     except Exception as e:
         print("OTA error:", e)
         send_telegram("❌ OTA update failed.")
@@ -175,7 +196,7 @@ def core1_task():
             utime.sleep(0.5)
 
     while True:
-        # Wi-Fi LED Status
+        # LED reflects Wi-Fi state when not cooling down
         if network.WLAN(network.STA_IF).isconnected():
             wifi_connected = True
             if not cooldown:
@@ -218,7 +239,7 @@ def main():
 
     sync_time()
 
-    # Boot message
+    # Boot message with commands
     boot_msg = (
         "Device Reboot and connected to Internet.\n"
         "/telemetry     /check     /time     /start     /stop     /real     /test     /all     /update"
