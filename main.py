@@ -1,4 +1,4 @@
-# main.py - v1.0.4
+# main.py - v1.0.5
 import network
 import urequests
 import utime
@@ -9,7 +9,7 @@ import os
 from machine import Pin, ADC
 
 # === CONFIGURATION ===
-VERSION = "v1.0.4"
+VERSION = "v1.0.5"
 WIFI_CREDENTIALS = {
     "Makers Studio": "Jba10600",
     "LorongGelap": "P@ssword.111"
@@ -17,7 +17,7 @@ WIFI_CREDENTIALS = {
 BOT_TOKEN = "8050097491:AAEupepQid6h9-ch8NghIbuVeyZQxl6miE4"
 CHAT_ID = "-1002725182243"
 TIMEZONE_OFFSET = 8 * 3600  # GMT +8
-GITHUB_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/main/main.py"
+GITHUB_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py"
 
 # === GLOBAL VARIABLES ===
 monitoring = True
@@ -71,7 +71,7 @@ def send_telegram(message):
     except Exception as e:
         print("Telegram Error:", e)
 
-# === OTA UPDATE ===
+# === OTA UPDATE (Only by /update command) ===
 def ota_update():
     try:
         send_telegram("OTA: Downloading update...")
@@ -80,7 +80,7 @@ def ota_update():
             with open("main.py", "w") as f:
                 f.write(response.text)
             response.close()
-            send_telegram("OTA: Update to v1.0.4 successful. Rebooting...")
+            send_telegram("OTA: Update successful. Rebooting...")
             utime.sleep(2)
             machine.reset()
         else:
