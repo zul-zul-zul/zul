@@ -10,7 +10,7 @@ WIFI_SSID = "Makers Studio"
 WIFI_PASSWORD = "Jba10600"
 BOT_TOKEN = "8050097491:AAEupepQid6h9-ch8NghIbuVeyZQxl6miE4"
 CHAT_ID = "-1002725182243"
-GITHUB_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py"
+GITHUB_URL = "https://raw.githubusercontent.com/username/repo/main/main.py?v=1.0.2"
 TIMEZONE_OFFSET = 8 * 3600  # GMT+8
 DIGITAL_PIN = Pin(15, Pin.IN)
 LED = Pin("LED", Pin.OUT)
