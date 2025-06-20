@@ -1,4 +1,4 @@
-# main.py - v1.0.6
+# main.py - v1.0.7
 import network
 import urequests
 import utime
@@ -9,7 +9,7 @@ import os
 from machine import Pin, ADC
 
 # === CONFIGURATION ===
-VERSION = "v1.0.6"
+VERSION = "v1.0.7"
 WIFI_CREDENTIALS = {
     "Makers Studio": "Jba10600",
     "LorongGelap": "P@ssword.111"
@@ -71,7 +71,7 @@ def send_telegram(message):
     except Exception as e:
         print("Telegram Error:", e)
 
-# === OTA UPDATE (Only by /update command) ===
+# === OTA UPDATE ===
 def ota_update():
     try:
         send_telegram("OTA: Downloading update...")
