@@ -1,80 +1,77 @@
-# SEKATA Bioflok Monitoring System
-# Version: v1.0.3
-
+# main.py - v1.0.4
 import network
 import urequests
 import utime
 import machine
 import _thread
-import ntptime
 import gc
+import os
+from machine import Pin, ADC
 
-# ==== CONFIGURATION ====
+# === CONFIGURATION ===
+VERSION = "v1.0.4"
 WIFI_CREDENTIALS = {
     "Makers Studio": "Jba10600",
     "LorongGelap": "P@ssword.111"
 }
-
 BOT_TOKEN = "8050097491:AAEupepQid6h9-ch8NghIbuVeyZQxl6miE4"
 CHAT_ID = "-1002725182243"
-NTP_RETRIES = 5
-VERSION = "v1.0.3"
-TIMEZONE_OFFSET = 8 * 3600  # GMT+8
+TIMEZONE_OFFSET = 8 * 3600  # GMT +8
 GITHUB_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/main/main.py"
 
-# ==== GLOBAL STATE ====
-digital_pin = machine.Pin(15, machine.Pin.IN)
-led = machine.Pin("LED", machine.Pin.OUT)
-monitoring_enabled = True
+# === GLOBAL VARIABLES ===
+monitoring = True
 mode = "real"
+last_alert_time = 0
 
-# ==== CONNECT TO WIFI ====
+# === HARDWARE ===
+digital_pin = Pin(15, Pin.IN)
+led = Pin("LED", Pin.OUT)
+
+# === CONNECT TO WIFI ===
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    for ssid, pwd in WIFI_CREDENTIALS.items():
+    for ssid, password in WIFI_CREDENTIALS.items():
         print(f"Trying Wi-Fi: {ssid}")
-        wlan.connect(ssid, pwd)
+        wlan.connect(ssid, password)
         for _ in range(10):
             if wlan.isconnected():
-                print("Connected to Wi-Fi")
+                print("Connected to", ssid)
                 return True
             utime.sleep(1)
-    print("Failed to connect to Wi-Fi.")
+    print("Failed to connect.")
     return False
 
-# ==== SYNC TIME ====
+# === SYNC TIME WITH NTP ===
 def sync_time():
-    for _ in range(NTP_RETRIES):
+    import ntptime
+    for _ in range(5):
         try:
             ntptime.settime()
-            utime.sleep(1)
-            print("Time synced via NTP.")
+            current = utime.time() + TIMEZONE_OFFSET
+            tm = utime.localtime(current)
+            print("NTP Time synced:", tm)
             return True
         except:
-            print("Retrying NTP...")
+            print("NTP sync failed. Retrying...")
             utime.sleep(10)
-    print("NTP sync failed.")
     return False
 
-# ==== GET TIME STRING ====
-def get_time_str():
-    t = utime.localtime(utime.time() + TIMEZONE_OFFSET)
-    return "{:02d}:{:02d} {} {:02d}/{:02d}/{}".format(
-        (t[3] % 12) or 12, t[4], "am" if t[3] < 12 else "pm", t[2], t[1], t[0]
-    )
-
-# ==== TELEGRAM MESSAGE ====
-def send_telegram(text):
+# === TELEGRAM HELPERS ===
+def send_telegram(message):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": CHAT_ID, "text": text}
-        response = urequests.post(url, json=payload)
+        data = {
+            "chat_id": CHAT_ID,
+            "text": message
+        }
+        response = urequests.post(url, json=data)
         response.close()
     except Exception as e:
-        print("Telegram send failed:", e)
+        print("Telegram Error:", e)
 
-# ==== OTA UPDATE ====
+# === OTA UPDATE ===
 def ota_update():
     try:
         send_telegram("OTA: Downloading update...")
@@ -83,128 +80,127 @@ def ota_update():
             with open("main.py", "w") as f:
                 f.write(response.text)
             response.close()
-            send_telegram("Update to v1.0.3 successful. Rebooting.")
+            send_telegram("OTA: Update to v1.0.4 successful. Rebooting...")
             utime.sleep(2)
             machine.reset()
         else:
-            send_telegram("OTA: Failed to download update.")
+            send_telegram(f"OTA: Failed with status {response.status_code}")
     except Exception as e:
-        send_telegram(f"OTA: Error: {str(e)}")
+        send_telegram("OTA: Error: " + str(e))
 
-# ==== HANDLE COMMAND ====
+# === GET CPU TEMPERATURE ===
+def get_cpu_temp():
+    sensor_temp = ADC(4)
+    reading = sensor_temp.read_u16()
+    voltage = (reading / 65535) * 3.3
+    temperature = 27 - (voltage - 0.706)/0.001721
+    return round(temperature, 2)
+
+# === GET TIME STRING ===
+def get_time_string():
+    t = utime.localtime(utime.time() + TIMEZONE_OFFSET)
+    hour = t[3]
+    am_pm = "am" if hour < 12 else "pm"
+    hour_12 = hour if 1 <= hour <= 12 else abs(hour - 12)
+    return f"{hour_12:02}:{t[4]:02} {am_pm} {t[2]:02}/{t[1]:02}/{t[0]}"
+
+# === CORE 1 FUNCTION ===
+def core1_thread():
+    global last_alert_time
+    while True:
+        wlan = network.WLAN(network.STA_IF)
+        internet = wlan.isconnected()
+        led.value(internet)
+
+        if monitoring:
+            value = digital_pin.value()
+            alert = False
+
+            if mode == "real" and value == 1:
+                alert = True
+            elif mode == "test" and value == 0:
+                alert = True
+
+            if alert and utime.time() - last_alert_time >= 30:
+                send_telegram("Sensor fault, check oxygen pump")
+                last_alert_time = utime.time()
+
+                # Blink during cooldown
+                for _ in range(30):
+                    led.toggle()
+                    utime.sleep(0.5)
+
+        utime.sleep(0.1)
+
+# === TELEGRAM COMMAND HANDLER ===
 def handle_command(cmd):
-    global monitoring_enabled, mode
-    if cmd == "/telemetry":
-        msg = f"Telemetry Data = {get_time_str()} - (Digital: {digital_pin.value()}) - CPU temp: {read_cpu_temp():.2f}°C"
-        send_telegram(msg)
-    elif cmd == "/check":
+    global monitoring, mode
+    if cmd == "/check":
         send_telegram(f"Digital Reading: {digital_pin.value()}")
+    elif cmd == "/telemetry":
+        send_telegram(f"Telemetry Data = {get_time_string()} - (Digital: {digital_pin.value()}) - CPU temp: {get_cpu_temp()}°C")
     elif cmd == "/time":
-        send_telegram(f"Current Time: {get_time_str()}")
-    elif cmd.startswith("#"):
+        send_telegram(f"Current Time: {get_time_string()}")
+    elif cmd.startswith("#") and len(cmd) == 13:
         try:
-            hh = int(cmd[1:3])
-            mm = int(cmd[3:5])
-            dd = int(cmd[5:7])
-            MM = int(cmd[7:9])
-            yyyy = int(cmd[9:13])
-            t = utime.mktime((yyyy, MM, dd, hh, mm, 0, 0, 0))
-            machine.RTC().datetime(utime.localtime(t - TIMEZONE_OFFSET))
-            send_telegram("Time manually set.")
+            h, m, d, M, y = int(cmd[1:3]), int(cmd[3:5]), int(cmd[5:7]), int(cmd[7:9]), int(cmd[9:13])
+            secs = utime.mktime((y, M, d, h, m, 0, 0, 0)) - TIMEZONE_OFFSET
+            machine.RTC().datetime(utime.localtime(secs)[:7] + (0,))
+            send_telegram("Time updated manually.")
         except:
             send_telegram("Invalid time format.")
     elif cmd == "/stop":
-        monitoring_enabled = False
-        send_telegram("Monitoring paused.")
+        monitoring = False
+        send_telegram("Monitoring stopped.")
     elif cmd == "/start":
-        monitoring_enabled = True
-        send_telegram("Monitoring resumed.")
+        monitoring = True
+        send_telegram("Monitoring started.")
     elif cmd == "/real":
         mode = "real"
-        send_telegram("Mode set to REAL.")
+        send_telegram("Mode set to /real.")
     elif cmd == "/test":
         mode = "test"
-        send_telegram("Mode set to TEST.")
+        send_telegram("Mode set to /test.")
     elif cmd == "/all":
         send_telegram("/telemetry     /check     /time     /stop     /start     /real     /test     /update     /all")
     elif cmd == "/update":
-        send_telegram("Starting OTA update...")
         ota_update()
 
-# ==== READ CPU TEMP ====
-def read_cpu_temp():
-    sensor_temp = machine.ADC(4)
-    voltage = sensor_temp.read_u16() * 3.3 / 65535
-    return 27 - (voltage - 0.706) / 0.001721
-
-# ==== CORE 1: MONITORING ====
-def core1_loop():
-    global monitoring_enabled
-    while True:
-        wlan = network.WLAN(network.STA_IF)
-        led.value(wlan.isconnected())
-
-        if not monitoring_enabled:
-            utime.sleep(1)
-            continue
-
-        value = digital_pin.value()
-        trigger = False
-
-        if mode == "real" and value == 1:
-            trigger = True
-        elif mode == "test" and value == 0:
-            trigger = True
-
-        if trigger:
-            send_telegram("Sensor fault, check oxygen pump")
-            for _ in range(30):
-                led.toggle()
-                utime.sleep(0.5)
-            led.value(wlan.isconnected())
-        else:
-            utime.sleep(1)
-
-# ==== CORE 0: TELEGRAM HANDLER ====
+# === TELEGRAM POLLING LOOP ===
 def telegram_loop():
-    last_hour = -1
-    last_update_id = 0
+    last_update = 0
     while True:
         try:
-            url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?timeout=10&offset={last_update_id + 1}"
-            res = urequests.get(url)
-            data = res.json()
-            res.close()
+            url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={last_update + 1}"
+            response = urequests.get(url)
+            data = response.json()
+            response.close()
 
             for result in data["result"]:
-                last_update_id = result["update_id"]
-                msg = result["message"]
-                text = msg.get("text", "")
-                handle_command(text)
-
-            now = utime.localtime(utime.time() + TIMEZONE_OFFSET)
-            if now[4] == 0 and now[3] != last_hour:
-                last_hour = now[3]
-                send_telegram(f"Telemetry Data = {get_time_str()} - (Digital: {digital_pin.value()}) - CPU temp: {read_cpu_temp():.2f}°C")
-
+                last_update = result["update_id"]
+                message = result["message"]
+                if "text" in message:
+                    handle_command(message["text"])
             gc.collect()
         except Exception as e:
-            print("Telegram error:", e)
-            utime.sleep(5)
+            print("Telegram loop error:", e)
+        utime.sleep(1)
 
-# ==== MAIN BOOT ====
+# === MAIN START ===
 def main():
-    if connect_wifi():
-        if sync_time():
-            boot_msg = (
-                f"SEKATA Bioflok Monitoring System\n"
-                f"Device Reboot and connected to Internet.\n"
-                f"Version: {VERSION}\n"
-                f"/telemetry     /check     /time     /stop     /start     /real     /test     /update     /all"
-            )
-            send_telegram(boot_msg)
+    connected = connect_wifi()
+    if connected:
+        sync_time()
 
-    _thread.start_new_thread(core1_loop, ())
+    boot_msg = (
+        "SEKATA Bioflok Monitoring System\n"
+        "Device Reboot and connected to Internet.\n"
+        f"Version: {VERSION}\n"
+        "/telemetry     /check     /time     /stop     /start     /real     /test     /update     /all"
+    )
+    send_telegram(boot_msg)
+
+    _thread.start_new_thread(core1_thread, ())
     telegram_loop()
 
 main()
