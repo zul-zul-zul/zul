@@ -1,3 +1,5 @@
+# main.py - v1.0.2
+
 OTA_VERSION = "1.0.2"
 
 import network
@@ -11,7 +13,6 @@ import ntptime
 import os
 from machine import Pin
 
-# ====== CONFIGURATION ======
 WIFI_CREDENTIALS = {
     "Makers Studio": "Jba10600",
     "LorongGelap": "P@ssword.111"
@@ -96,21 +97,10 @@ def perform_ota_update():
         new_code = r.text
         r.close()
 
-        for line in new_code.split("\n"):
-            if "OTA_VERSION" in line and "=" in line:
-                new_version = line.split("=")[1].strip().strip('"')
-                break
-        else:
-            send_telegram("OTA: No version info found.")
-            return
-
-        if new_version == OTA_VERSION:
-            send_telegram(f"Already up to date (v{OTA_VERSION}).")
-            return
-
         with open("main.py", "w") as f:
             f.write(new_code)
-        send_telegram(f"✅ OTA updated to v{new_version}. Rebooting...")
+
+        send_telegram("✅ OTA update complete. Rebooting now...")
         utime.sleep(2)
         machine.reset()
 
@@ -214,7 +204,7 @@ def main():
         return
     sync_time()
 
-    send_telegram("📡 SEKATA Bioflok Monitoring System v1.0.2")
+    send_telegram(f"📡 SEKATA Bioflok Monitoring System v{OTA_VERSION}")
     utime.sleep(2)
     send_telegram("Device Reboot and connected to Internet.")
     utime.sleep(2)
