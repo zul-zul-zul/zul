@@ -1,11 +1,11 @@
-# main.py - v1.0.1
+# main.py - v1.0.2
 import network, urequests, utime, ujson, gc, os
 from machine import Pin, ADC, Timer, reset
 import _thread
 import ntptime
 
 # --- CONFIGURATION ---
-VERSION = "v1.0.1"
+VERSION = "v1.0.2"
 WIFI_SSID = "Makers Studio"
 WIFI_PASSWORD = "Jba10600"
 BOT_TOKEN = "8050097491:AAEupepQid6h9-ch8NghIbuVeyZQxl6miE4"
@@ -75,6 +75,20 @@ def save_update_id(uid):
     with open(update_id_file, "w") as f:
         f.write(str(uid))
 
+def acknowledge_all_pending_updates():
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+        r = urequests.get(url)
+        data = r.json()
+        r.close()
+        updates = data.get("result", [])
+        if updates:
+            max_update_id = max(u["update_id"] for u in updates)
+            save_update_id(max_update_id)
+            print(f"Acknowledged up to update_id {max_update_id}")
+    except Exception as e:
+        print("Acknowledge failed:", e)
+
 def handle_command(text):
     global monitoring, mode
 
@@ -120,7 +134,6 @@ def handle_command(text):
 
 def telegram_loop():
     last_update = read_update_id()
-
     while True:
         try:
             url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={last_update + 1}"
@@ -185,7 +198,6 @@ def core1_monitor():
             send_telegram("Sensor fault, check oxygen pump")
             last_alert_time = utime.time()
 
-            # Blink LED during cooldown
             for _ in range(cooldown_seconds):
                 LED.toggle()
                 utime.sleep(1)
@@ -196,6 +208,7 @@ def core1_monitor():
 # --- MAIN EXECUTION ---
 if connect_wifi():
     sync_time()
+    acknowledge_all_pending_updates()
     boot_msg = f"SEKATA Bioflok Monitoring System ({VERSION})\nDevice Reboot and connected to Internet.\n/telemetry     /check     /time     /stop     /start     /real     /test     /all     /update"
     send_telegram(boot_msg)
 else:
