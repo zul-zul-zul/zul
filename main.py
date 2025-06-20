@@ -1,11 +1,11 @@
-# main.py - v1.0.13
+# main.py - v1.0.13 - Stable
 import network, urequests, utime, ujson, gc, os
 from machine import Pin, ADC, Timer, reset
 import _thread
 import ntptime
 
 # --- CONFIGURATION ---
-VERSION = "v1.0.13"
+VERSION = "v1.0.13 - Stable"
 WIFI_SSID = "Makers Studio"
 WIFI_PASSWORD = "Jba10600"
 BOT_TOKEN = "8050097491:AAEupepQid6h9-ch8NghIbuVeyZQxl6miE4"
