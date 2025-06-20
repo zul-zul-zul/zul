@@ -1,4 +1,4 @@
-# main.py v1.0.3
+# main.py v1.0.14
 
 import network
 import urequests
@@ -17,7 +17,7 @@ BOT_TOKEN = "8050097491:AAEupepQid6h9-ch8NghIbuVeyZQxl6miE4"
 CHAT_ID = "-1002725182243"
 NTP_SERVER = "pool.ntp.org"
 TIMEZONE_OFFSET = 8 * 3600  # GMT+8
-VERSION = "v1.0.3"
+VERSION = "v1.0.14"
 GITHUB_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py?v=1.0.2"
 
 # ====== STATE VARIABLES ======
