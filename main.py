@@ -10,7 +10,7 @@ import os
 from machine import Pin
 
 # ====== OTA VERSION ======
-OTA_VERSION = "1.0.0"
+OTA_VERSION = "1.0.1"
 
 # ====== CONFIGURATION ======
 WIFI_CREDENTIALS = {
@@ -103,7 +103,7 @@ def get_updates():
     except:
         return []
 
-# ====== OTA UPDATE WITH VERSION CHECK ======
+# ====== OTA UPDATE (ONLY BY COMMAND) ======
 def perform_ota_update():
     try:
         print("Checking for OTA update...")
@@ -120,12 +120,10 @@ def perform_ota_update():
             send_telegram("OTA: No version info found.")
             return
 
-        # Compare versions
         if new_version == OTA_VERSION:
             send_telegram(f"Already up to date (v{OTA_VERSION}).")
             return
 
-        # Update and reboot
         with open("main.py", "w") as f:
             f.write(new_code)
         send_telegram(f"✅ OTA update to v{new_version} successful. Rebooting...")
@@ -239,9 +237,11 @@ def main():
 
     sync_time()
 
-    # Boot message with commands
+    # 🔔 Boot message (Option 3 - Alert Style)
     boot_msg = (
-        "Device Reboot and connected to Internet.\n"
+        "📡 SEKATA Bioflok Monitoring System\n"
+        "Status: ONLINE ✅  |  Monitoring: ACTIVE\n"
+        "Use the following commands:\n"
         "/telemetry     /check     /time     /start     /stop     /real     /test     /all     /update"
     )
     send_telegram(boot_msg)
