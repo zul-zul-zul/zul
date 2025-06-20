@@ -10,7 +10,7 @@ import os
 from machine import Pin
 
 # ====== OTA VERSION ======
-OTA_VERSION = "1.0.1"
+OTA_VERSION = "1.0.2"
 
 # ====== CONFIGURATION ======
 WIFI_CREDENTIALS = {
@@ -111,7 +111,6 @@ def perform_ota_update():
         new_code = r.text
         r.close()
 
-        # Extract OTA_VERSION from downloaded script
         for line in new_code.split("\n"):
             if line.startswith("OTA_VERSION"):
                 new_version = line.split("=")[1].strip().strip('"')
@@ -194,7 +193,6 @@ def core1_task():
             utime.sleep(0.5)
 
     while True:
-        # LED reflects Wi-Fi state when not cooling down
         if network.WLAN(network.STA_IF).isconnected():
             wifi_connected = True
             if not cooldown:
@@ -237,14 +235,14 @@ def main():
 
     sync_time()
 
-    # 🔔 Boot message (Option 3 - Alert Style)
-    boot_msg = (
-        "📡 SEKATA Bioflok Monitoring System\n"
-        "Status: ONLINE ✅  |  Monitoring: ACTIVE\n"
-        "Use the following commands:\n"
-        "/telemetry     /check     /time     /start     /stop     /real     /test     /all     /update"
-    )
-    send_telegram(boot_msg)
+    # 🔔 Sequential boot message
+    send_telegram("📡 SEKATA Bioflok Monitoring System")
+    utime.sleep(2)
+    send_telegram("Status: ONLINE ✅  |  Monitoring: ACTIVE. |  Mode /real")
+    utime.sleep(2)
+    send_telegram("Use the following commands:")
+    utime.sleep(2)
+    send_telegram("/telemetry     /check     /time     /start     /stop     /real     /test     /all     /update")
 
     _thread.start_new_thread(core1_task, ())
 
