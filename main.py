@@ -6,7 +6,8 @@ import machine
 import _thread
 import gc
 import ntptime
-from machine import Pin, Timer
+import os
+from machine import Pin
 
 # ====== CONFIGURATION ======
 WIFI_CREDENTIALS = {
@@ -17,6 +18,7 @@ WIFI_CREDENTIALS = {
 BOT_TOKEN = "8050097491:AAEupepQid6h9-ch8NghIbuVeyZQxl6miE4"
 CHAT_ID = "-1002725182243"
 TELEGRAM_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
+OTA_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/main/main.py"
 
 DIGITAL_PIN = Pin(15, Pin.IN)
 LED = Pin("LED", Pin.OUT)
@@ -98,6 +100,22 @@ def get_updates():
     except:
         return []
 
+# ====== OTA UPDATE ======
+def perform_ota_update():
+    try:
+        r = urequests.get(OTA_URL)
+        new_code = r.text
+        r.close()
+        with open("main.py", "w") as f:
+            f.write(new_code)
+        send_telegram("✅ OTA update successful. Rebooting...")
+        utime.sleep(2)
+        machine.reset()
+    except Exception as e:
+        print("OTA error:", e)
+        send_telegram("❌ OTA update failed.")
+
+# ====== COMMAND HANDLER ======
 def handle_command(msg):
     global last_update_id, monitoring, mode
     last_update_id = msg["update_id"]
@@ -140,7 +158,10 @@ def handle_command(msg):
         mode = "test"
         send_telegram("Mode set to /test.")
     elif text == "/all":
-        send_telegram("/telemetry /check /time /start /stop /real /test /all\n#HHMMDDMMYYYY to set time")
+        send_telegram("/telemetry     /check     /time     /start     /stop     /real     /test     /all     /update")
+    elif text == "/update":
+        send_telegram("Starting OTA update...")
+        perform_ota_update()
 
 # ====== CORE 1 SENSOR MONITORING ======
 def core1_task():
@@ -175,12 +196,11 @@ def core1_task():
             if alert:
                 send_telegram("Sensor fault, check oxygen pump")
                 cooldown = True
-                blink_led()  # 30s blinking
+                blink_led()
                 cooldown = False
             else:
                 utime.sleep(1)
 
-        # Send hourly telemetry at top of hour
         h, m = get_hour_min()
         if m == 0 and h != last_hour:
             temp = machine.cpu().temperature()
@@ -197,7 +217,13 @@ def main():
         return
 
     sync_time()
-    send_telegram("Device Reboot. Commands: /telemetry /all")
+
+    # Boot message
+    boot_msg = (
+        "Device Reboot and connected to Internet.\n"
+        "/telemetry     /check     /time     /start     /stop     /real     /test     /all     /update"
+    )
+    send_telegram(boot_msg)
 
     _thread.start_new_thread(core1_task, ())
 
@@ -210,5 +236,3 @@ def main():
 
 # ====== RUN MAIN ======
 main()
-
-
