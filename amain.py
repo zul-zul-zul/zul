@@ -15,7 +15,7 @@ CHAT_ID = "-1002725182243"
 TIMEZONE_OFFSET = 8 * 3600  # GMT +8
 DIGITAL_PIN = 15
 LED = Pin("LED", Pin.OUT)
-UPDATE_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py?v=0.0.4"
+UPDATE_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py?v=0.0.5"
 UPDATE_ID_FILE = "update_id.txt"
 
 # =====================[ GLOBALS ]=====================
@@ -23,8 +23,8 @@ UPDATE_ID_FILE = "update_id.txt"
 monitoring = True
 mode = "real"
 ota_updating = False
-core1_should_stop = False
-core1_has_exited = False
+core1_should_stop = False  # fixed
+core1_has_exited = False   # fixed
 last_update_id = None
 digital = Pin(DIGITAL_PIN, Pin.IN)
 
@@ -142,6 +142,7 @@ def do_ota_update():
 
 def core1_monitor():
     global core1_has_exited
+    print("Core 1: started")
     blink = False
     while not core1_should_stop:
         LED.value(network.WLAN(network.STA_IF).isconnected())
@@ -154,6 +155,7 @@ def core1_monitor():
                     LED.toggle()
                     utime.sleep(0.5)
         utime.sleep(1)
+    print("Core 1: exiting")
     core1_has_exited = True
 
 # =====================[ COMMAND HANDLER ]=====================
@@ -197,6 +199,7 @@ def handle_command(cmd):
     elif cmd == "/update":
         global core1_should_stop
         core1_should_stop = True
+        send_message("Stopping core 1 for OTA...")
         while not core1_has_exited:
             utime.sleep(0.1)
         do_ota_update()
@@ -222,6 +225,10 @@ def listen_telegram():
 # =====================[ MAIN ]=====================
 
 def main():
+    global core1_should_stop, core1_has_exited
+    core1_should_stop = False   # ensure reset
+    core1_has_exited = False    # ensure reset
+
     connect_wifi()
     sync_time()
     load_update_id()
