@@ -1,11 +1,11 @@
-# main.py — beta v0.0.5(a)
+# main.py — beta v0.0.6
 
 import network, utime, urequests, machine, _thread, gc
 from machine import Pin
 
 # =====================[ CONFIG ]=====================
 
-VERSION = "beta v0.0.5(a)"
+VERSION = "beta v0.0.6"
 WIFI_CREDENTIALS = {
     "Makers Studio": "Jba10600",
     "LorongGelap": "P@ssword.111"
@@ -15,7 +15,7 @@ CHAT_ID = "-1002725182243"
 TIMEZONE_OFFSET = 8 * 3600  # GMT +8
 DIGITAL_PIN = 15
 LED = Pin("LED", Pin.OUT)
-UPDATE_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py?v=0.0.5"
+UPDATE_URL = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py?v=0.0.6"
 UPDATE_ID_FILE = "update_id.txt"
 
 # =====================[ GLOBALS ]=====================
@@ -23,8 +23,8 @@ UPDATE_ID_FILE = "update_id.txt"
 monitoring = True
 mode = "real"
 ota_updating = False
-core1_should_stop = False  # fixed
-core1_has_exited = False   # fixed
+core1_should_stop = False
+core1_has_exited = False
 last_update_id = None
 digital = Pin(DIGITAL_PIN, Pin.IN)
 
@@ -120,6 +120,7 @@ def do_ota_update():
     global ota_updating
     ota_updating = True
     send_message("OTA: Starting update. Please wait...")
+    utime.sleep(2)
 
     try:
         r = urequests.get(UPDATE_URL)
@@ -130,7 +131,7 @@ def do_ota_update():
             f.write(new_code)
 
         send_message("OTA: Update complete. Rebooting...")
-        utime.sleep(3)
+        utime.sleep(2)
         machine.reset()
 
     except Exception as e:
@@ -138,31 +139,27 @@ def do_ota_update():
         print("OTA error:", e)
         ota_updating = False
 
-# =====================[ CORE 1 ]=====================
+# =====================[ CORE 1: LED STATUS ONLY ]=====================
 
-def core1_monitor():
+def core1_led_status():
     global core1_has_exited
-    print("Core 1: started")
-    blink = False
+    print("Core 1: LED status loop")
+    wlan = network.WLAN(network.STA_IF)
     while not core1_should_stop:
-        LED.value(network.WLAN(network.STA_IF).isconnected())
-        if monitoring:
-            value = digital.value()
-            should_alert = (value == 1 if mode == "real" else value == 0)
-            if should_alert:
-                send_message("Sensor fault, check oxygen pump")
-                for _ in range(30):
-                    LED.toggle()
-                    utime.sleep(0.5)
-        utime.sleep(1)
-    print("Core 1: exiting")
+        if wlan.isconnected():
+            LED.value(1)
+            utime.sleep(1)
+        else:
+            LED.toggle()
+            utime.sleep(0.5)
+    LED.value(0)
     core1_has_exited = True
+    print("Core 1: LED loop exited")
 
 # =====================[ COMMAND HANDLER ]=====================
 
 def handle_command(cmd):
     global monitoring, mode
-
     if cmd == "/check":
         send_message(f"Digital reading: {digital.value()}")
     elif cmd == "/telemetry":
@@ -198,8 +195,9 @@ def handle_command(cmd):
             send_message("Invalid time format.")
     elif cmd == "/update":
         global core1_should_stop
+        monitoring = False
         core1_should_stop = True
-        send_message("Stopping core 1 for OTA...")
+        send_message("Preparing OTA update...")
         while not core1_has_exited:
             utime.sleep(0.1)
         do_ota_update()
@@ -222,12 +220,27 @@ def listen_telegram():
                 gc.collect()
         utime.sleep(2)
 
+# =====================[ DIGITAL MONITORING ON CORE 0 ]=====================
+
+def monitor_digital_sensor():
+    while not ota_updating:
+        if monitoring:
+            value = digital.value()
+            should_alert = (value == 1 if mode == "real" else value == 0)
+            if should_alert:
+                send_message("Sensor fault, check oxygen pump")
+                for _ in range(30):
+                    if ota_updating:
+                        break
+                    utime.sleep(1)
+        utime.sleep(1)
+
 # =====================[ MAIN ]=====================
 
 def main():
     global core1_should_stop, core1_has_exited
-    core1_should_stop = False   # ensure reset
-    core1_has_exited = False    # ensure reset
+    core1_should_stop = False
+    core1_has_exited = False
 
     connect_wifi()
     sync_time()
@@ -236,7 +249,8 @@ def main():
     boot_msg = f"SEKATA Bioflok Monitoring System\nDevice Reboot and connected to Internet.\nVersion: {VERSION}\n/telemetry     /check     /time     /start     /stop     /real     /test     /all     /update"
     send_message(boot_msg)
 
-    _thread.start_new_thread(core1_monitor, ())
+    _thread.start_new_thread(core1_led_status, ())
+    _thread.start_new_thread(monitor_digital_sensor, ())
     listen_telegram()
 
 main()
