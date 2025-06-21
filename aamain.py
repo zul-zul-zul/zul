@@ -1,11 +1,11 @@
-# main.py — beta v0.0.4
+# main.py — beta v0.0.5
 
 import network, utime, urequests, machine, _thread, gc
 from machine import Pin
 
 # =====================[ CONFIG ]=====================
 
-VERSION = "beta v0.0.4"
+VERSION = "beta v0.0.5"
 WIFI_CREDENTIALS = {
     "Makers Studio": "Jba10600",
     "LorongGelap": "P@ssword.111"
