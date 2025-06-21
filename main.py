@@ -1,4 +1,4 @@
-# main.py – v0.0.10 
+# main.py – v0.0.12
 
 import network
 import time
@@ -17,7 +17,7 @@ WIFI_CREDENTIALS = {
 BOT_TOKEN = "8050097491:AAEupepQid6h9-ch8NghIbuVeyZQxl6miE4"
 CHAT_ID = "-1002725182243"
 TIMEZONE_OFFSET = 8 * 3600  # GMT+8
-VERSION = "v0.0.10"
+VERSION = "v0.0.12"
 
 # Pins
 DIGITAL_PIN = machine.Pin(15, machine.Pin.IN)
@@ -129,7 +129,7 @@ def stop_all_tasks():
 
 def ota_update():
     try:
-        url = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py?v=0.0.10"
+        url = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py?v=0.0.11"
         r = urequests.get(url)
         with open("main.py", "w") as f:
             f.write(r.text)
@@ -148,12 +148,12 @@ def listen_telegram():
             time.sleep(1)
             continue
         try:
-            url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={last_update_id + 1}"
+            url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={last_update_id + 1}&timeout=5"
             r = urequests.get(url)
             data = r.json()
             r.close()
 
-            for result in data["result"]:
+            for result in data.get("result", []):
                 message = result["message"]
                 text = message.get("text", "")
                 last_update_id = result["update_id"]
@@ -168,7 +168,8 @@ def listen_telegram():
                     except:
                         send_telegram("Invalid time format.")
             gc.collect()
-        except:
+        except Exception as e:
+            print("Telegram error:", e)
             time.sleep(1)
 
 def parse_manual_time(timestr):
@@ -207,8 +208,7 @@ def main():
     print("Booting SEKATA Bioflok Monitoring System...")
 
     # 1. Connect Wi-Fi
-    wifi_ok = connect_wifi()
-    if wifi_ok:
+    if connect_wifi():
         led.on()
         time.sleep(2)
     else:
@@ -216,14 +216,13 @@ def main():
         return
 
     # 2. Sync time
-    time_ok = sync_time()
-    if time_ok:
+    if sync_time():
         time.sleep(2)
     else:
         send_telegram("⚠️ NTP time sync failed")
         return
 
-    # 3. Send boot message
+    # 3. Boot message
     boot_msg = (
         f"SEKATA Bioflok Monitoring System\n"
         f"Device Rebooted. Version: {VERSION}\n"
@@ -232,7 +231,7 @@ def main():
     if send_telegram(boot_msg):
         time.sleep(2)
 
-    # 4. Start monitoring and Telegram loop
+    # 4. Start background monitoring and listen to commands
     _thread.start_new_thread(monitor_loop, ())
     listen_telegram()
 
