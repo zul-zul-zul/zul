@@ -1,4 +1,4 @@
-# main.py – v0.0.9
+# main.py – v0.0.10
 
 import network
 import time
@@ -17,7 +17,7 @@ WIFI_CREDENTIALS = {
 BOT_TOKEN = "8050097491:AAEupepQid6h9-ch8NghIbuVeyZQxl6miE4"
 CHAT_ID = "-1002725182243"
 TIMEZONE_OFFSET = 8 * 3600  # GMT+8
-VERSION = "v0.0.9"
+VERSION = "v0.0.10"
 
 # Pins
 DIGITAL_PIN = machine.Pin(15, machine.Pin.IN)
@@ -119,11 +119,17 @@ def handle_command(command):
         updating = True
         send_telegram("Starting OTA update...")
         time.sleep(2)
+        stop_all_tasks()
         ota_update()
+
+def stop_all_tasks():
+    global monitoring
+    monitoring = False
+    time.sleep(1)
 
 def ota_update():
     try:
-        url = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py?v=0.0.9"
+        url = "https://raw.githubusercontent.com/zul-zul-zul/zul/refs/heads/main/main.py?v=0.0.10"
         r = urequests.get(url)
         with open("main.py", "w") as f:
             f.write(r.text)
@@ -178,7 +184,7 @@ def parse_manual_time(timestr):
 def monitor_loop():
     global monitoring
     while True:
-        if not monitoring:
+        if not monitoring or updating:
             time.sleep(1)
             continue
 
@@ -197,6 +203,7 @@ def monitor_loop():
 # ===== MAIN =====
 
 def main():
+    global updating
     print("Booting SEKATA Bioflok Monitoring System...")
 
     # 1. Connect Wi-Fi
@@ -206,7 +213,7 @@ def main():
         time.sleep(2)
     else:
         led.off()
-        return  # Stop if no Wi-Fi
+        return
 
     # 2. Sync time
     time_ok = sync_time()
@@ -216,20 +223,16 @@ def main():
         send_telegram("⚠️ NTP time sync failed")
         return
 
-    # 3. Send boot message via Telegram
+    # 3. Send boot message
     boot_msg = (
         f"SEKATA Bioflok Monitoring System\n"
         f"Device Rebooted. Version: {VERSION}\n"
         "/telemetry  /check  /time  /start  /stop  /real  /test  /update  /all"
     )
-
     if send_telegram(boot_msg):
         time.sleep(2)
-    else:
-        print("Telegram failed.")
-        return
 
-    # 4. Start monitoring and Telegram
+    # 4. Start monitoring and Telegram loop
     _thread.start_new_thread(monitor_loop, ())
     listen_telegram()
 
